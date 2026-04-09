@@ -1,4 +1,5 @@
 import sqlite3
+import json
 
 DB_PATH = "contacts.db"
 
@@ -71,7 +72,6 @@ def add_or_get_person(person_name):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    # Try to get existing person
     cursor.execute("SELECT id FROM people WHERE name = ?", (person_name,))
     result = cursor.fetchone()
     
@@ -155,3 +155,77 @@ def delete_person(person_name):
     conn.commit()
     conn.close()
     return True, f"Deleted {person_name} and all their data"
+
+def edit_contact_data(person_name, field_name, new_value):
+    """Edit existing contact data"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute("SELECT id FROM people WHERE name = ?", (person_name,))
+    person_result = cursor.fetchone()
+    if not person_result:
+        conn.close()
+        return False, f"Person '{person_name}' not found"
+    person_id = person_result[0]
+    
+    field_id = get_field_id(field_name)
+    if not field_id:
+        conn.close()
+        return False, f"Field '{field_name}' does not exist"
+    
+    cursor.execute("SELECT value FROM contact_data WHERE person_id = ? AND field_id = ?", 
+                   (person_id, field_id))
+    if not cursor.fetchone():
+        conn.close()
+        return False, f"No data found for {person_name} with field '{field_name}'"
+    
+    cursor.execute("UPDATE contact_data SET value = ? WHERE person_id = ? AND field_id = ?",
+                   (new_value, person_id, field_id))
+    conn.commit()
+    conn.close()
+    return True, f"Updated {person_name}.{field_name} = {new_value}"
+
+def find_by_value(field_name, value):
+    """Find all people with a specific field value"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    field_id = get_field_id(field_name)
+    if not field_id:
+        conn.close()
+        return None, f"Field '{field_name}' does not exist"
+    
+    cursor.execute('''
+        SELECT p.name, cd.value
+        FROM people p
+        JOIN contact_data cd ON p.id = cd.person_id
+        WHERE cd.field_id = ? AND cd.value LIKE ?
+    ''', (field_id, f'%{value}%'))
+    
+    results = cursor.fetchall()
+    conn.close()
+    return results, None
+
+def export_all_data():
+    """Export all contacts to JSON format"""
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    cursor.execute('''
+        SELECT p.name, f.field_name, cd.value
+        FROM people p
+        JOIN contact_data cd ON p.id = cd.person_id
+        JOIN fields f ON cd.field_id = f.id
+        ORDER BY p.name, f.field_name
+    ''')
+    
+    results = cursor.fetchall()
+    conn.close()
+    
+    contacts = {}
+    for name, field_name, value in results:
+        if name not in contacts:
+            contacts[name] = {}
+        contacts[name][field_name] = value
+    
+    return contacts
