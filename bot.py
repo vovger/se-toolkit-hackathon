@@ -1,6 +1,7 @@
 import os
 import json
 import io
+import httpx
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
@@ -9,11 +10,12 @@ import database as db
 
 load_dotenv()
 TOKEN = os.getenv("BOT_TOKEN")
+QWEN_API_KEY = os.getenv("QWEN_API_KEY")
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "👋 Hello! I'm a contact manager bot.\n\n"
-        "**Commands:**\n"
+        "Commands:\n"
         "/addfield <name> - create a new field (e.g., birthday)\n"
         "/fields - show all fields\n"
         "/add <person> <field> <value> - add data about a person\n"
@@ -22,8 +24,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/edit <person> <field> <new_value> - edit existing data\n"
         "/list - show all people\n"
         "/delete <person> - delete a person\n"
-        "/export - export all contacts to JSON file",
-        parse_mode="Markdown"
+        "/export - export all contacts to JSON file\n"
+        "/aisearch <query> - AI-powered smart search"
     )
 
 async def addfield(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -45,7 +47,7 @@ async def fields(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📭 No fields yet. Create one with /addfield")
     else:
         fields_list = "\n".join(f"• {f}" for f in all_fields)
-        await update.message.reply_text(f"📋 **Existing fields:**\n{fields_list}", parse_mode="Markdown")
+        await update.message.reply_text(f"📋 Existing fields:\n{fields_list}")
 
 async def add(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 3:
@@ -75,11 +77,11 @@ async def find(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"📭 No data found for '{person_name}'")
         return
     
-    message = f"📇 **{person_name}**\n"
+    message = f"📇 {person_name}\n"
     for _, field_name, value in results:
         message += f"   • {field_name}: {value}\n"
     
-    await update.message.reply_text(message, parse_mode="Markdown")
+    await update.message.reply_text(message)
 
 async def findby(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 2:
@@ -101,9 +103,9 @@ async def findby(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     message = f"🔍 Found {len(results)} person(s) with {field_name} containing '{value}':\n\n"
     for name, val in results:
-        message += f"• **{name}**: {val}\n"
+        message += f"• {name}: {val}\n"
     
-    await update.message.reply_text(message, parse_mode="Markdown")
+    await update.message.reply_text(message)
 
 async def edit(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if len(context.args) < 3:
@@ -128,7 +130,7 @@ async def list_people(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("📭 No people saved yet. Add someone with /add")
     else:
         people_list = "\n".join(f"• {p}" for p in people)
-        await update.message.reply_text(f"📋 **Saved people ({len(people)}):**\n{people_list}", parse_mode="Markdown")
+        await update.message.reply_text(f"📋 Saved people ({len(people)}):\n{people_list}")
 
 async def delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args:
@@ -160,6 +162,81 @@ async def export(update: Update, context: ContextTypes.DEFAULT_TYPE):
         caption=f"✅ Exported {len(data)} contact(s)"
     )
 
+async def aisearch(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """AI-powered search for contacts using Qwen"""
+    if not context.args:
+        await update.message.reply_text(
+            "❌ Usage: /aisearch <query>\n"
+            "Example: /aisearch Anna from Google"
+        )
+        return
+    
+    if not QWEN_API_KEY:
+        await update.message.reply_text(
+            "❌ Qwen API key not configured. Please set QWEN_API_KEY environment variable."
+        )
+        return
+    
+    query = " ".join(context.args)
+    
+    all_people = db.get_all_people()
+    if not all_people:
+        await update.message.reply_text("📭 No contacts saved yet. Add someone with /add")
+        return
+    
+    people_info = []
+    for person in all_people:
+        data = db.find_person(person)
+        info = {field: value for _, field, value in data}
+        info["name"] = person
+        people_info.append(info)
+    
+    await update.message.reply_text(f"🔍 AI searching for '{query}'...")
+    
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        try:
+            response = await client.post(
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {QWEN_API_KEY}",
+                    "Content-Type": "application/json"
+                },
+                json={
+                    "model": "qwen/qwen3.6-plus-preview:free",
+                    "messages": [
+                        {
+                            "role": "system",
+                            "content": f"""You have a list of contacts: {people_info}
+User search query: "{query}"
+
+Which contact is the user most likely looking for?
+Return ONLY the exact name from the list. If none match, return "NONE"."""
+                        }
+                    ],
+                    "temperature": 0.1
+                }
+            )
+            
+            if response.status_code != 200:
+                await update.message.reply_text(f"❌ AI error: {response.status_code}")
+                return
+            
+            result = response.json()
+            name = result["choices"][0]["message"]["content"].strip()
+            
+            if name == "NONE" or name not in all_people:
+                await update.message.reply_text(f"🔍 No matching contact found for '{query}'")
+                return
+            
+            results = db.find_person(name)
+            message = f"🤖 AI found: {name}\n"
+            for _, field_name, value in results:
+                message += f"   • {field_name}: {value}\n"
+            await update.message.reply_text(message)
+            
+        except Exception as e:
+            await update.message.reply_text(f"❌ AI error: {str(e)[:100]}")
+
 def main():
     db.init_db()
     app = Application.builder().token(TOKEN).build()
@@ -174,11 +251,11 @@ def main():
     app.add_handler(CommandHandler("list", list_people))
     app.add_handler(CommandHandler("delete", delete))
     app.add_handler(CommandHandler("export", export))
+    app.add_handler(CommandHandler("aisearch", aisearch))
     
     print("🤖 Bot is running...")
-    print("Commands available: start, addfield, fields, add, find, findby, edit, list, delete, export")
+    print("Commands available: start, addfield, fields, add, find, findby, edit, list, delete, export, aisearch")
     app.run_polling()
 
 if __name__ == "__main__":
     main()
-
