@@ -72,4 +72,4 @@ Step-by-step instructions:
 ## Links
 
 GitHub: https://github.com/vovger/se-toolkit-hackathon
-Telegram bot: https://t.me/your_bot_username
+Telegram bot: https://t.me/@ContactPeoplebot 
