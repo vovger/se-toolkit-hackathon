@@ -1,21 +1,39 @@
 # Contact Manager Bot
 
-Telegram bot that allows you to create custom contact fields and store any information about a person.
+A Telegram bot that lets you create custom contact fields and instantly find any person by name.
 
 ## Product context
 
-**End users:** Anyone who manages many contacts — freelancers, students, managers, or regular users.
+End users: Anyone who manages many contacts (freelancers, students, managers, regular users).
 
-**Problem:** Contacts are scattered across different apps, and fixed fields (phone/email only) don't fit everyone's needs.
+Problem: Contacts are scattered across different apps. Fixed fields (phone/email only) don't fit everyone's needs. Friends need birthdays, colleagues need company names.
 
-**Solution:** A Telegram bot where you create your own custom fields and find all data about a person instantly by name.
+Solution: A Telegram bot where you create your own custom fields (like "birthday", "company") and find all data about a person instantly by name.
 
-## Commands
+## Features
+
+Implemented (Version 2):
+- /addfield <name> - Create a new custom field
+- /fields - Show all existing fields
+- /add <person> <field> <value> - Add data about a person
+- /find <person> - Show all fields and values for that person
+- /findby <field> <value> - Find people by a specific field value
+- /edit <person> <field> <new_value> - Edit existing data
+- /list - Show all saved people
+- /delete <person> - Delete a person and all their data
+- /export - Export all contacts to a JSON file
+- /aisearch <query> - AI-powered smart search using Qwen
+
+Not yet implemented:
+- Auto-suggest fields when adding a person
+- Stale contact reminders
+- Predefined templates for work/friend/family
+
+## Usage
 
 | Command | Example | Description |
 |---------|---------|-------------|
 | /addfield | /addfield birthday | Create new field |
-| /fields | /fields | List all fields |
 | /add | /add Anna birthday 15.05 | Add data |
 | /find | /find Anna | Find person |
 | /findby | /findby birthday 15.05 | Search by value |
@@ -23,29 +41,35 @@ Telegram bot that allows you to create custom contact fields and store any infor
 | /list | /list | Show all people |
 | /delete | /delete Anna | Delete person |
 | /export | /export | Export to JSON |
-
+| /aisearch | /aisearch Anna from Google | AI-powered search |
 
 ## Deployment
 
-### Step 1: Clone repository
-git clone https://github.com/vovger/se-toolkit-hackathon
-cd se-toolkit-hackathon
+VM OS: Ubuntu 24.04
 
-### Step 2: Build Docker image
-docker build -t contact-bot .
+What to install:
+- Docker
+- Git
 
-### Step 3: Run container
-docker run -d --restart always --name contact-bot -e BOT_TOKEN="your_token" contact-bot
+Step-by-step instructions:
 
-### Step 4: Check logs
-docker logs contact-bot
+1. Clone the repository
+   git clone https://github.com/vovger/se-toolkit-hackathon
+   cd se-toolkit-hackathon
 
-## License
+2. Create .env file with your bot token
+   echo "BOT_TOKEN=your_telegram_bot_token_here" > .env
 
-MIT License
+3. Build Docker image
+   docker build -t contact-bot .
 
-## Author
+4. Run the container
+   docker run -d --restart always --name contact-bot --env-file .env contact-bot
 
-Name: Vladimir Germanov
-Email: v.germanov@innopolis.university
-Group: DSAI-02
+5. Check logs
+   docker logs contact-bot
+
+## Links
+
+GitHub: https://github.com/vovger/se-toolkit-hackathon
+Telegram bot: https://t.me/your_bot_username
