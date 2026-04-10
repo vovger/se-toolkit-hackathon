@@ -1,6 +1,14 @@
+cat > README.md << 'EOF'
 # Contact Manager Bot
 
 A Telegram bot that lets you create custom contact fields and instantly find any person by name.
+
+## Demo
+
+![Screenshot 1](demo/screenshot1.png)
+![Screenshot 2](demo/screenshot2.png)
+![Screenshot 3](demo/screenshot3.png)
+![Screenshot 4](demo/screenshot4.png)
 
 ## Product context
 
@@ -72,4 +80,5 @@ Step-by-step instructions:
 ## Links
 
 GitHub: https://github.com/vovger/se-toolkit-hackathon
-Telegram bot: https://t.me/@ContactPeoplebot 
+Telegram bot: https://t.me/your_bot_username
+EOF
